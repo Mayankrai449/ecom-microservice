@@ -2,13 +2,23 @@ package utils
 
 import (
 	"errors"
+	"log"
+	"os"
 	"time"
 
 	"github.com/Mayankrai449/ecom-microservice/users/models"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 )
 
-const SecretKey = "your-secret-key"
+func init() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+}
+
+var SecretKey = os.Getenv("JWT_SECRET")
 
 type JWTClaim struct {
 	UserID uint   `json:"user_id"`
