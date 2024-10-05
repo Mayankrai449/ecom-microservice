@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"github.com/Mayankrai449/ecom-microservice/handlers"
+	"github.com/Mayankrai449/ecom-microservice/inventory/handlers"
 	"github.com/labstack/echo/v4"
 )
 

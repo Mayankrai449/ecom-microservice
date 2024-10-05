@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/Mayankrai449/ecom-microservice/db"
-	"github.com/Mayankrai449/ecom-microservice/models"
+	"github.com/Mayankrai449/ecom-microservice/inventory/db"
+	"github.com/Mayankrai449/ecom-microservice/inventory/models"
 	"github.com/labstack/echo/v4"
 )
 
