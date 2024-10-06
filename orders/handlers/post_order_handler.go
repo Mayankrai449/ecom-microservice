@@ -1,41 +1,66 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
-	"github.com/Mayankrai449/ecom-microservice/orders/db"
+	pb "github.com/Mayankrai449/ecom-microservice/orders/proto/inventory"
+
 	"github.com/Mayankrai449/ecom-microservice/orders/models"
 	"github.com/Mayankrai449/ecom-microservice/users/utils"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
+	"gorm.io/gorm"
 )
 
-func PostOrder(c echo.Context) error {
+type OrderHandler struct {
+	db              *gorm.DB
+	inventoryClient pb.InventoryServiceClient
+}
+
+func NewOrderHandler(db *gorm.DB, inventoryClient pb.InventoryServiceClient) *OrderHandler {
+	return &OrderHandler{
+		db:              db,
+		inventoryClient: inventoryClient,
+	}
+}
+
+func (h *OrderHandler) CreateOrder(c echo.Context) error {
 	claims := c.Get("user").(*utils.JWTClaim)
 	userID := claims.UserID
 
-	order := new(models.Order)
-	if err := c.Bind(order); err != nil {
-		log.Errorf("Failed to bind request: %v", err)
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request format")
+	var order models.Order
+	if err := c.Bind(&order); err != nil {
+		log.Error("Error binding order:", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	productIDs := make([]uint32, len(order.Products))
+	quantities := make([]uint32, len(order.Products))
+	for i, product := range order.Products {
+		productIDs[i] = uint32(product.ProductID)
+		quantities[i] = uint32(product.Quantity)
+	}
+
+	stockResponse, err := h.inventoryClient.CheckStock(context.Background(), &pb.StockRequest{
+		ProductIds: productIDs,
+		Quantities: quantities,
+	})
+	if err != nil {
+		log.Error("Error checking stock:", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to check stock"})
+	}
+
+	if !stockResponse.InStock {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": stockResponse.Message})
 	}
 
 	order.UserID = userID
 	order.OrderStatus = models.StatusPending
-
-	if err := c.Validate(order); err != nil {
-		log.Errorf("Validation error: %v", err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	if err := h.db.Create(&order).Error; err != nil {
+		log.Error("Error creating order:", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create order"})
 	}
 
-	if err := db.GetDB().Create(order).Error; err != nil {
-		log.Errorf("Failed to save order: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create order")
-	}
-
-	log.Infof("Order created successfully for user %d", userID)
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"message": "Order created successfully",
-		"order":   order,
-	})
+	return c.JSON(http.StatusCreated, order)
 }
